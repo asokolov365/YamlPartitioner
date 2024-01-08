@@ -1,4 +1,4 @@
-module YamlPartitioner
+module github.com/asokolov365/YamlPartitioner
 
 go 1.20
 
