@@ -39,6 +39,7 @@ func New(inputFile, commonPath string, opts ...Option) (*Partitioner, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return WithConfig(cfg, inputFile, commonPath)
 }
 
@@ -81,7 +82,7 @@ type Partitioner struct {
 	mu               sync.Mutex
 }
 
-// Report returns a partitioning report
+// Report returns a partitioning report.
 func (p *Partitioner) Report() string {
 	return p.report
 }
@@ -91,7 +92,7 @@ func (p *Partitioner) ShardItemsCount() map[string]int {
 	return p.shardItemsCount
 }
 
-// Reset sets the partitioner to its initial state
+// Reset sets the partitioner to its initial state.
 func (p *Partitioner) Reset() {
 	p.totalItemsBefore = 0
 	p.shardItemsCount = make(map[string]int, p.cfg.NodesCount())
@@ -100,8 +101,6 @@ func (p *Partitioner) Reset() {
 // Run performs the partitioning of a given input file
 // accordingly to settings in the Partitioner Config.
 func (p *Partitioner) Run(ctx context.Context) error {
-	var report strings.Builder
-
 	p.Reset()
 
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -109,7 +108,7 @@ func (p *Partitioner) Run(ctx context.Context) error {
 
 	input, err := os.ReadFile(p.inputFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to read input file: %w", err)
 	}
 
 	startTime := time.Now()
@@ -128,7 +127,7 @@ func (p *Partitioner) Run(ctx context.Context) error {
 		// Checking if context canceled before running a shard
 		select {
 		case <-ctx.Done():
-			return ctx.Err() // error somewhere, terminate
+			return fmt.Errorf("%s canceled: %w", name, ctx.Err()) // error somewhere, terminate
 		default: // default is a must to avoid blocking
 		}
 
@@ -169,6 +168,8 @@ func (p *Partitioner) Run(ctx context.Context) error {
 	finishTime := time.Since(startTime)
 
 	// Write partitioning stats
+	var report strings.Builder
+
 	report.WriteString(
 		fmt.Sprintf("Partitioning %q of size %d bytes finished in %d ms\n",
 			p.outputFile, len(input), finishTime.Milliseconds()),
@@ -199,18 +200,22 @@ func (p *Partitioner) Run(ctx context.Context) error {
 	}
 
 	p.report = report.String()
+
 	return nil
 }
 
 func (p *Partitioner) setItemsBefore(n int) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
 	if p.totalItemsBefore == 0 {
 		p.totalItemsBefore = n
 	}
+
 	if p.totalItemsBefore != n {
 		return fmt.Errorf("items consistency error")
 	}
+
 	return nil
 }
 
@@ -220,6 +225,7 @@ func (p *Partitioner) cleanupOnError() {
 		if p.cfg.thisShardID >= 0 && p.cfg.thisShardID != i {
 			continue
 		}
+
 		outputFile := filepath.Join(p.cfg.workDir, name, p.outputFile)
 		os.Remove(outputFile)
 	}
@@ -228,27 +234,30 @@ func (p *Partitioner) cleanupOnError() {
 func createOutputFile(path string) (*os.File, error) {
 	fileDir := filepath.Dir(path)
 
-	if err := os.MkdirAll(fileDir, 0755); err != nil {
+	if err := os.MkdirAll(fileDir, 0o755); err != nil {
 		return nil, fmt.Errorf("error making directory %q: %w", fileDir, err)
 	}
 
-	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0644)
+	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0o644) //nolint
 }
 
 func validateInputFile(path string) error {
 	fileInfo, err := os.Stat(path)
-	// path exists
-	if err == nil {
+
+	switch {
+	case err == nil: // path exists
+		// path is a directory
 		if fileInfo.IsDir() {
-			// path is a directory
 			return fmt.Errorf("file is directory: %q", path)
 		}
 		// path is a file
 		return nil
-	} else if errors.Is(err, os.ErrNotExist) {
+
+	case errors.Is(err, os.ErrNotExist):
 		// path does *not* exist
 		return fmt.Errorf("no such file or directory: %q", path)
-	} else {
+
+	default:
 		// Schrodinger: file may or may not exist. See err for details.
 		// Therefore, do *NOT* use !os.IsNotExist(err) to test for file existence
 		return fmt.Errorf("schrodinger: %q may or may not exist: %w", path, err)

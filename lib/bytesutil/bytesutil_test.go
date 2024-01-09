@@ -25,8 +25,8 @@ func TestRandStringAsBytes(t *testing.T) {
 	f := func(n int) {
 		b := RandStringAsBytes(n)
 		require.Equal(t, n, len(b))
-		// fmt.Println(string(b))
 	}
+
 	for i := 0; i < 128; i++ {
 		f(i)
 	}

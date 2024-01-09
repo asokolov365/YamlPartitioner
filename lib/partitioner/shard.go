@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/asokolov365/YamlPartitioner/lib/bytesutil"
-
 	"gopkg.in/yaml.v3"
 )
 
@@ -42,7 +41,7 @@ type shard struct {
 	itemsCountAfter  int
 }
 
-// Reset sets the shard to its initial state
+// Reset sets the shard to its initial state.
 func (sh *shard) Reset() {
 	sh.ctx = nil
 	sh.headNode = nil
@@ -72,6 +71,7 @@ func (sh *shard) Run(ctx context.Context, input []byte, output io.Writer) error 
 	// with configured shard writer
 	yamlEncoder := yaml.NewEncoder(output)
 	yamlEncoder.SetIndent(sh.cfg.resultYamlIndent)
+
 	defer yamlEncoder.Close()
 
 	if err := yamlEncoder.Encode(sh.headNode); err != nil {
@@ -100,6 +100,7 @@ func (sh *shard) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	sh.headNode = value
+
 	return nil
 }
 
@@ -107,14 +108,14 @@ func (sh *shard) descendRecursively(ctx context.Context, node *yaml.Node, currPa
 	// Checking context before each dive
 	select {
 	case <-ctx.Done():
-		// fmt.Printf("%s canceled\n", sh.name)
-		return ctx.Err() // error somewhere, terminate
+		return fmt.Errorf("%s canceled: %w", sh.name, ctx.Err()) // error somewhere, terminate
 	default: // default is a must to avoid blocking
 	}
 
 	defer sh.markVisited(currPath)
 
 	atSplitPoint := false
+
 	switch sh.whereAt(currPath) {
 	case 0:
 		atSplitPoint = true
@@ -122,7 +123,7 @@ func (sh *shard) descendRecursively(ctx context.Context, node *yaml.Node, currPa
 		return nil
 	}
 
-	switch node.Kind {
+	switch node.Kind { //nolint
 	case yaml.SequenceNode:
 		if atSplitPoint {
 			sh.itemsCountBefore += len(node.Content)
@@ -131,15 +132,18 @@ func (sh *shard) descendRecursively(ctx context.Context, node *yaml.Node, currPa
 			for _, item := range node.Content {
 				valueAsBytes, err := yaml.Marshal(item)
 				if err != nil {
-					return err
+					return fmt.Errorf("unable to marshal %v: %w", item, err)
 				}
+
 				nodeNames := sh.cfg.consistentHashing.GetN(valueAsBytes, sh.cfg.replicasCount)
 				if _, ok := nodeNames[sh.name]; ok {
 					newContent = append(newContent, item)
 				}
 			}
+
 			node.Content = newContent
 			sh.itemsCountAfter += len(newContent)
+
 			return nil
 		}
 
@@ -151,6 +155,7 @@ func (sh *shard) descendRecursively(ctx context.Context, node *yaml.Node, currPa
 
 	case yaml.MappingNode:
 		var key, value *yaml.Node
+
 		if atSplitPoint {
 			// divide by 2 because yaml.MappingNode item is key and value pair
 			sh.itemsCountBefore += len(node.Content) / 2
@@ -165,21 +170,27 @@ func (sh *shard) descendRecursively(ctx context.Context, node *yaml.Node, currPa
 					newContent = append(newContent, key, value)
 				}
 			}
+
 			node.Content = newContent
 			sh.itemsCountAfter += len(newContent) / 2
+
 			return nil
 		}
 
 		for i := 0; i < len(node.Content); i += 2 {
 			key = node.Content[i]
 			value = node.Content[i+1]
+
 			if err := sh.descendRecursively(ctx, value, append(currPath, key.Value)); err != nil {
 				return err
 			}
 		}
+
 	case yaml.AliasNode:
 		// Always pass AliasNodes as is
 		return nil
+
+	// case yaml.DocumentNode, yaml.ScalarNode:
 	default:
 		if atSplitPoint {
 			return fmt.Errorf("invalid split point path: node at %q is not shardable", sh.cfg.splitPoint)
@@ -198,14 +209,17 @@ func (sh *shard) whereAt(path []string) int {
 	if len(path) > maxDeep {
 		return 1
 	}
+
 	for i := 0; i < len(path); i++ {
 		spElem, _ := sh.cfg.splitPoint.Elem(i)
 		if path[i] != spElem {
 			return 1
 		}
 	}
+
 	if len(path) == maxDeep {
 		return 0
 	}
+
 	return -1
 }

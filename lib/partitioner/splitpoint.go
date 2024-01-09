@@ -23,15 +23,18 @@ func newSplitPoint(s string) (*splitPoint, error) {
 	sp := strings.Split(s, ".")
 	for i := 0; i < len(sp); i++ {
 		elem := strings.TrimSpace(sp[i])
+
 		if len(elem) == 0 {
 			return nil, fmt.Errorf("invalid split point path: %q", s)
 		}
+
 		sp[i] = elem
 	}
+
 	return &splitPoint{slice: sp, str: strings.Join(sp, ".")}, nil
 }
 
-// splitPoint represents a path to a shardable yaml Node
+// splitPoint represents a path to a shardable yaml Node.
 type splitPoint struct {
 	str   string
 	slice []string
@@ -51,5 +54,6 @@ func (sp *splitPoint) Elem(i int) (string, error) {
 	if i < 0 || i >= sp.Len() {
 		return "", fmt.Errorf("index out of range: %d", i)
 	}
+
 	return sp.slice[i], nil
 }

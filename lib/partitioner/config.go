@@ -34,7 +34,7 @@ type ConsistentHashing interface {
 }
 
 // Config defines common configuration for yaml partitioning.
-// Config must be immutable
+// Config must be immutable.
 type Config struct {
 	consistentHashing ConsistentHashing
 	splitPoint        *splitPoint
@@ -44,12 +44,12 @@ type Config struct {
 	resultYamlIndent  int
 }
 
-// NodesCount returns the number of nodes in the ConsistentHashing
+// NodesCount returns the number of nodes in the ConsistentHashing.
 func (c *Config) NodesCount() int {
 	return c.consistentHashing.NodesCount()
 }
 
-// NodeNames returns names of nodes in the ConsistentHashing
+// NodeNames returns names of nodes in the ConsistentHashing.
 func (c *Config) NodeNames() []string {
 	return c.consistentHashing.NodeNames()
 }
@@ -82,6 +82,7 @@ func (c *Config) WorkDir() string {
 //	WithThisShardID(-1),
 //
 // )
+// .
 func NewConfig(opts ...Option) (*Config, error) {
 	cfg := &Config{
 		replicasCount:    1,
@@ -126,18 +127,19 @@ func NewConfig(opts ...Option) (*Config, error) {
 // an empty or minimal Config struct created in the Config constructor.
 // Option represents Functional Options Pattern.
 // See this article for details -
-// https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis
+// https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis .
 type Option func(*Config) error
 
 // WithConsistentHashing sets the field with the object that
 // implements ConsistentHashing interface
-// REQUIRED
+// REQUIRED .
 func WithConsistentHashing(h ConsistentHashing) Option {
 	if h.NodesCount() < 2 {
 		return func(c *Config) error {
 			return fmt.Errorf("number of nodes must be >= 2")
 		}
 	}
+
 	return func(c *Config) error {
 		c.consistentHashing = h
 		return nil
@@ -151,12 +153,13 @@ func WithConsistentHashing(h ConsistentHashing) Option {
 // Note: the SplitPoint yaml Node Kind must be either a SequenceNode (list)
 // or a MappingNode (map).
 // The SplitPoint must be in format "<key>", "<key>.*.<key>"
-// REQUIRED
+// REQUIRED .
 func WithSplitPoint(s string) Option {
 	sp, err := newSplitPoint(s)
 	if err != nil {
 		return func(c *Config) error { return err }
 	}
+
 	return func(c *Config) error {
 		c.splitPoint = sp
 		return nil
@@ -176,11 +179,12 @@ func WithThisShardID(id int) Option {
 
 // WithReplicasCount sets the number of replicas.
 // Meaning how many shards will get the same data.
-// This defaults to 1
+// This defaults to 1.
 func WithReplicasCount(n int) Option {
 	if n < 1 {
 		n = 1
 	}
+
 	return func(c *Config) error {
 		c.replicasCount = n
 		return nil
@@ -188,11 +192,12 @@ func WithReplicasCount(n int) Option {
 }
 
 // WithResultYamlIndent sets the indentation used for Yaml encoding.
-// This defaults to 2
+// This defaults to 2.
 func WithResultYamlIndent(i int) Option {
 	if i < 2 || i > 9 {
 		i = 2
 	}
+
 	return func(c *Config) error {
 		c.resultYamlIndent = i
 		return nil
@@ -200,7 +205,7 @@ func WithResultYamlIndent(i int) Option {
 }
 
 // WithWorkingDirectory sets the directory where.
-// This defaults to os.TempDir()
+// This defaults to os.TempDir() .
 func WithWorkingDirectory(path string) Option {
 	// TODO: handle writing to stdout with bytes.Buffer
 	// if path == "stdout" {
@@ -209,10 +214,11 @@ func WithWorkingDirectory(path string) Option {
 	// 		return nil
 	// 	}
 	// }
-
 	path, err := filepath.Abs(path)
 	if err != nil {
-		return func(c *Config) error { return err }
+		return func(c *Config) error {
+			return fmt.Errorf("error getting absolute path for %q: %w", path, err)
+		}
 	}
 
 	if err := validateWorkDir(path); err != nil {
@@ -227,21 +233,25 @@ func WithWorkingDirectory(path string) Option {
 
 func validateWorkDir(path string) error {
 	fileInfo, err := os.Stat(path)
-	// path exists
-	if err == nil {
+
+	switch {
+	case err == nil: // path exists
+		// path is a directory
 		if fileInfo.IsDir() {
-			// path is a directory
 			return nil
 		}
 		// path is a file
 		return fmt.Errorf("file is an existing file: %q", path)
-	} else if errors.Is(err, os.ErrNotExist) {
+
+	case errors.Is(err, os.ErrNotExist):
 		// path does *not* exist
-		if err := os.MkdirAll(path, 0755); err != nil {
+		if err := os.MkdirAll(path, 0o755); err != nil {
 			return fmt.Errorf("error making directory %q: %w", path, err)
 		}
+
 		return nil
-	} else {
+
+	default:
 		// Schrodinger: path may or may not exist. See err for details.
 		// Therefore, do *NOT* use !os.IsNotExist(err) to test for path existence
 		return fmt.Errorf("schrodinger: %q may or may not exist: %w", path, err)
