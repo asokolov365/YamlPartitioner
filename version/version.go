@@ -16,8 +16,8 @@
 package version
 
 var (
-	// Version is the version for this build, set at build time via LDFLAGS
+	// Version is the version for this build, set at build time via LDFLAGS.
 	Version string
-	// GitCommit is the short-form commit hash of this build, set at build time
+	// GitCommit is the short-form commit hash of this build, set at build time.
 	GitCommit string
 )
