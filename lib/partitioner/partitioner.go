@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package partitioner implements utility routines for partitioning
+// of a single YAML file.
 package partitioner
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -46,22 +47,18 @@ func New(inputFile, commonPath string, opts ...Option) (*Partitioner, error) {
 // WithConfig is being used to create a new partitioner
 // with the previously created configuration.
 func WithConfig(cfg *Config, inputFile, commonPath string) (*Partitioner, error) {
-	if err := validateInputFile(inputFile); err != nil {
-		return nil, err
-	}
-
 	if len(commonPath) == 0 {
 		commonPath = filepath.Dir(inputFile)
 	}
 
 	p := &Partitioner{
-		inputFile:       inputFile,
-		cfg:             cfg,
-		shardItemsCount: make(map[string]int, cfg.NodesCount()),
+		inputFile: inputFile,
+		cfg:       cfg,
+		// shardItemsCount: make(map[string]int, cfg.NodesCount()),
 	}
 
 	outputFile, ok := strings.CutPrefix(inputFile, commonPath)
-	if !ok {
+	if !ok || len(outputFile) == 0 {
 		return nil, fmt.Errorf("invalid common prefix for %q: %q", inputFile, commonPath)
 	}
 
@@ -108,7 +105,7 @@ func (p *Partitioner) Run(ctx context.Context) error {
 
 	input, err := os.ReadFile(p.inputFile)
 	if err != nil {
-		return fmt.Errorf("unable to read input file: %w", err)
+		return fmt.Errorf("failed to read input file: %w", err)
 	}
 
 	startTime := time.Now()
@@ -162,7 +159,7 @@ func (p *Partitioner) Run(ctx context.Context) error {
 
 	if err := g.Wait(); err != nil {
 		p.cleanupOnError()
-		return fmt.Errorf("error partitioning %q: %w", p.inputFile, err)
+		return fmt.Errorf("failed to partition %q: %w", p.inputFile, err)
 	}
 
 	finishTime := time.Since(startTime)
@@ -186,16 +183,21 @@ func (p *Partitioner) Run(ctx context.Context) error {
 			return err
 		}
 
-		report.WriteString(
-			fmt.Sprintf("Shard %q got %d items in resulting yaml\n",
-				shard.name, shard.itemsCountAfter),
-		)
-
 		p.shardItemsCount[shard.name] = shard.itemsCountAfter
 
 		if shard.itemsCountAfter == 0 {
 			outputFile := filepath.Join(p.cfg.workDir, shard.name, p.outputFile)
 			os.Remove(outputFile)
+
+			report.WriteString(
+				fmt.Sprintf("Shard %q got %d items in resulting yaml (output file is not created)\n",
+					shard.name, shard.itemsCountAfter),
+			)
+		} else {
+			report.WriteString(
+				fmt.Sprintf("Shard %q got %d items in resulting yaml\n",
+					shard.name, shard.itemsCountAfter),
+			)
 		}
 	}
 
@@ -210,6 +212,8 @@ func (p *Partitioner) setItemsBefore(n int) error {
 
 	if p.totalItemsBefore == 0 {
 		p.totalItemsBefore = n
+
+		return nil
 	}
 
 	if p.totalItemsBefore != n {
@@ -235,31 +239,8 @@ func createOutputFile(path string) (*os.File, error) {
 	fileDir := filepath.Dir(path)
 
 	if err := os.MkdirAll(fileDir, 0o755); err != nil {
-		return nil, fmt.Errorf("error making directory %q: %w", fileDir, err)
+		return nil, fmt.Errorf("failed to make directory %q: %w", fileDir, err)
 	}
 
 	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0o644) //nolint
-}
-
-func validateInputFile(path string) error {
-	fileInfo, err := os.Stat(path)
-
-	switch {
-	case err == nil: // path exists
-		// path is a directory
-		if fileInfo.IsDir() {
-			return fmt.Errorf("file is directory: %q", path)
-		}
-		// path is a file
-		return nil
-
-	case errors.Is(err, os.ErrNotExist):
-		// path does *not* exist
-		return fmt.Errorf("no such file or directory: %q", path)
-
-	default:
-		// Schrodinger: file may or may not exist. See err for details.
-		// Therefore, do *NOT* use !os.IsNotExist(err) to test for file existence
-		return fmt.Errorf("schrodinger: %q may or may not exist: %w", path, err)
-	}
 }
