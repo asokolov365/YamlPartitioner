@@ -21,7 +21,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_splitPoint(t *testing.T) {
+func Test_SplitPoint(t *testing.T) {
+	t.Parallel()
+
 	f := func(s string) {
 		t.Helper()
 
@@ -41,7 +43,9 @@ func Test_splitPoint(t *testing.T) {
 	f("module")
 }
 
-func Test_splitPointError(t *testing.T) {
+func Test_SplitPointError(t *testing.T) {
+	t.Parallel()
+
 	f := func(s string) {
 		t.Helper()
 

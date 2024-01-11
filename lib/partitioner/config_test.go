@@ -12,40 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package bytesutil
+package partitioner
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestRandStringAsBytes(t *testing.T) {
+func TestShard_ShardIdOutOfRange(t *testing.T) {
 	t.Parallel()
 
-	f := func(n int) {
-		b := RandStringAsBytes(n)
-		require.Equal(t, n, len(b))
-	}
+	var err error
 
-	for i := 0; i < 128; i++ {
-		f(i)
-	}
+	_, err = NewConfig(
+		WithConsistentHashing(getConsistentHashing()),
+		WithReplicasCount(3),
+		WithResultYamlIndent(2),
+		WithSplitPoint("*"),
+		WithThisShardID(5),
+		WithWorkingDirectory(workDir),
+	)
+	require.ErrorContains(t, err, "this shard id is out of range")
 }
 
-func TestToUnsafeString(t *testing.T) {
+func TestShard_ReplicationTooBig(t *testing.T) {
 	t.Parallel()
 
-	b := []byte("str")
-	require.Equal(t, "str", ToUnsafeString(b))
-}
+	var err error
 
-func TestToUnsafeBytes(t *testing.T) {
-	t.Parallel()
-
-	s := "str"
-	if !bytes.Equal([]byte("str"), ToUnsafeBytes(s)) {
-		t.Fatalf(`[]bytes(%s) doesnt equal to %s `, s, s)
-	}
+	_, err = NewConfig(
+		WithConsistentHashing(getConsistentHashing()),
+		WithReplicasCount(3),
+		WithResultYamlIndent(2),
+		WithSplitPoint("groups.*.rules"),
+		WithThisShardID(-1),
+		WithWorkingDirectory(workDir),
+	)
+	require.ErrorContains(t, err, "replication factor is too big")
 }

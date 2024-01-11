@@ -43,6 +43,8 @@ func randStringAsBytes() []byte {
 }
 
 func TestEmpty(t *testing.T) {
+	t.Parallel()
+
 	r, err := New(xxhash.Sum64)
 	require.NoError(t, err)
 	require.Empty(t, r.Get([]byte("hello")))
@@ -51,6 +53,8 @@ func TestEmpty(t *testing.T) {
 }
 
 func TestNew_Okay(t *testing.T) {
+	t.Parallel()
+
 	nodeNum := 5
 	nodes := make([]string, nodeNum)
 
@@ -68,6 +72,8 @@ func TestNew_Okay(t *testing.T) {
 }
 
 func TestNew_WithDuplicates(t *testing.T) {
+	t.Parallel()
+
 	nodes := []string{"node1", "node2", "node3", "node1", "node2", "node1"}
 	_, err := New(xxhash.Sum64, nodes...)
 	require.Error(t, err)
@@ -75,6 +81,8 @@ func TestNew_WithDuplicates(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
+	t.Parallel()
+
 	nodeNum := 5
 	r, err := New(xxhash.Sum64)
 	require.NoError(t, err)
@@ -98,6 +106,8 @@ func TestAdd(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
+	t.Parallel()
+
 	nodeNum := 5
 	nodes := make([]string, nodeNum)
 
@@ -129,6 +139,8 @@ func TestRemove(t *testing.T) {
 }
 
 func TestDistributeOver1(t *testing.T) {
+	t.Parallel()
+
 	nodeName := "default"
 	nodes := []string{nodeName}
 
@@ -147,6 +159,8 @@ func TestDistributeOver1(t *testing.T) {
 }
 
 func TestGetN(t *testing.T) {
+	t.Parallel()
+
 	nodeNum := 3
 	nodes := make([]string, nodeNum)
 
@@ -177,6 +191,8 @@ func TestGetN(t *testing.T) {
 }
 
 func TestDistributeOver5(t *testing.T) {
+	t.Parallel()
+
 	nodeNum := 5
 	nodes := make([]string, nodeNum)
 
@@ -231,6 +247,8 @@ func TestDistributeOver5(t *testing.T) {
 }
 
 func TestDistributeOver8(t *testing.T) {
+	t.Parallel()
+
 	nodeNum := 8
 	nodes := make([]string, nodeNum)
 
@@ -285,6 +303,8 @@ func TestDistributeOver8(t *testing.T) {
 }
 
 func TestSameDistribution(t *testing.T) {
+	t.Parallel()
+
 	nodeNum := 8
 	nodes := make([]string, nodeNum)
 
@@ -324,6 +344,8 @@ func TestSameDistribution(t *testing.T) {
 }
 
 func TestMovers(t *testing.T) {
+	t.Parallel()
+
 	nodeNum := 9
 	nodes := make([]string, nodeNum)
 
