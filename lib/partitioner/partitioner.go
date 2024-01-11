@@ -105,6 +105,7 @@ func (p *Partitioner) Run(ctx context.Context) error {
 
 	input, err := os.ReadFile(p.inputFile)
 	if err != nil {
+		p.cleanupOnError()
 		return fmt.Errorf("failed to read input file: %w", err)
 	}
 
@@ -124,6 +125,7 @@ func (p *Partitioner) Run(ctx context.Context) error {
 		// Checking if context canceled before running a shard
 		select {
 		case <-ctx.Done():
+			p.cleanupOnError()
 			return fmt.Errorf("%s canceled: %w", name, ctx.Err()) // error somewhere, terminate
 		default: // default is a must to avoid blocking
 		}
@@ -224,6 +226,8 @@ func (p *Partitioner) setItemsBefore(n int) error {
 }
 
 func (p *Partitioner) cleanupOnError() {
+	p.report = fmt.Sprintf("Partitioning %q failed. See errors report.\n", p.outputFile)
+
 	for i, name := range p.cfg.NodeNames() {
 		// Skipping other shards if thisShardID has set
 		if p.cfg.thisShardID >= 0 && p.cfg.thisShardID != i {
