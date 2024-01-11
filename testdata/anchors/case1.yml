@@ -1,0 +1,81 @@
+groups:
+- concurrency: 4
+  interval: 5m
+  name: rules-dc1
+  params:
+    extra_filters:
+    - '{datacenter=~"dc1.*"}'
+  rules:
+  - &id001
+    expr: avg(100 - (rate(node_cpu_seconds_total{mode='idle'}[1m]) * 100)) without
+      (cpu)
+    record: by_node:node_cpu_seconds_total:avg
+  - &id002
+    expr: avg(100 - (rate(windows_cpu_time_total{mode='idle'}[1m]) * 100)) without
+      (core)
+    record: by_node:windows_cpu_time_total:avg
+  - &id003
+    expr: avg(100 - (rate(node_cpu_seconds_total{mode='idle'}[1m]) * 100)) by (region,
+      datacenter)
+    record: by_dc:node_cpu_seconds_total:avg
+  - &id004
+    expr: avg(100 - (rate(windows_cpu_time_total{mode='idle'}[1m]) * 100)) by (region,
+      datacenter)
+    record: by_dc:windows_cpu_time_total:avg
+  - &id005
+    expr: avg(100 - (rate(node_cpu_seconds_total{mode='idle'}[1m]) * 100)) by (region,
+      datacenter, superfarm)
+    record: by_dc_superfarm:node_cpu_seconds_total:avg
+  - &id006
+    expr: avg(100 - (rate(windows_cpu_time_total{mode='idle'}[1m]) * 100)) by (region,
+      datacenter, superfarm)
+    record: by_dc_superfarm:windows_cpu_time_total:avg
+  - &id007
+    expr: avg(node_memory_Active_bytes/node_memory_MemTotal_bytes) by (region, datacenter)
+    record: by_dc:node_memory_used:avg
+  - &id008
+    expr: avg(windows_os_physical_memory_free_bytes/windows_os_visible_memory_bytes)
+      by (region, datacenter)
+    record: by_dc:windows_memory_used:avg
+  - &id009
+    expr: avg(node_memory_Active_bytes/node_memory_MemTotal_bytes) by (region, datacenter,
+      superfarm)
+    record: by_dc_superfarm:node_memory_used:avg
+  - &id010
+    expr: avg(windows_os_physical_memory_free_bytes/windows_os_visible_memory_bytes)
+      by (region, datacenter, superfarm)
+    record: by_dc_superfarm:windows_memory_used:avg
+- concurrency: 4
+  interval: 5m
+  name: rules-dc2
+  params:
+    extra_filters:
+    - '{datacenter=~"dc2.*"}'
+  rules:
+  - *id001
+  - *id002
+  - *id003
+  - *id004
+  - *id005
+  - *id006
+  - *id007
+  - *id008
+  - *id009
+  - *id010
+- concurrency: 4
+  interval: 5m
+  name: rules-other
+  params:
+    extra_filters:
+    - '{datacenter!~"dc1.*|dc2.*"}'
+  rules:
+  - *id001
+  - *id002
+  - *id003
+  - *id004
+  - *id005
+  - *id006
+  - *id007
+  - *id008
+  - *id009
+  - *id010
