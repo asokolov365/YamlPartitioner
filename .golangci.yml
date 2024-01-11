@@ -73,20 +73,20 @@ linters:
     - nolintlint
     - nonamedreturns
     - nosprintfhostport
-    # - paralleltest # TODO: enable
+    - paralleltest
     - prealloc
     - predeclared
     - promlinter
     - reassign
-    # - revive # TODO: enable
+    - revive
     # - rowserrcheck
-    # - stylecheck # TODO: enable
+    - stylecheck
     - tagliatelle
     - tenv
     - testableexamples
     # - testpackage
     - thelper
-    # - tparallel # TODO: enable
+    - tparallel
     - unconvert
     - unparam
     - usestdlibvars
@@ -129,6 +129,11 @@ linters-settings:
   # depguard:
   #   list-type: denylist
   #   include-go-root: true
+
+  paralleltest:
+    # Ignore missing calls to `t.Parallel()` and only report incorrect uses of it.
+    # Default: false
+    ignore-missing: true
 
 run:
   timeout: 5m

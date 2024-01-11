@@ -217,7 +217,7 @@ func WithWorkingDirectory(path string) Option {
 	path, err := filepath.Abs(path)
 	if err != nil {
 		return func(c *Config) error {
-			return fmt.Errorf("error getting absolute path for %q: %w", path, err)
+			return fmt.Errorf("failed to get absolute path for %q: %w", path, err)
 		}
 	}
 
@@ -246,7 +246,7 @@ func validateWorkDir(path string) error {
 	case errors.Is(err, os.ErrNotExist):
 		// path does *not* exist
 		if err := os.MkdirAll(path, 0o755); err != nil {
-			return fmt.Errorf("error making directory %q: %w", path, err)
+			return fmt.Errorf("failed to make directory %q: %w", path, err)
 		}
 
 		return nil

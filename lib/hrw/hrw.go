@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package hrw implements Rendezvous
+// or highest random weight (HRW) hashing algorithm.
 package hrw
 
 import (

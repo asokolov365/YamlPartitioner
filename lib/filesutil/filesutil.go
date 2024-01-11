@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package filesutil implements utility routines for working with files.
 package filesutil
 
 import (
@@ -34,7 +35,7 @@ func MoveDirAll(srcDir, dstDir string) error {
 	}
 
 	if err := os.RemoveAll(srcDir); err != nil {
-		return fmt.Errorf("unable to remove %q: %w", srcDir, err)
+		return fmt.Errorf("failed to remove %q: %w", srcDir, err)
 	}
 
 	return nil
@@ -46,7 +47,7 @@ func MoveDirAll(srcDir, dstDir string) error {
 func CopyDirAll(srcDir, dstDir string) error {
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
-		return fmt.Errorf("unable to read directory %q: %w", srcDir, err)
+		return fmt.Errorf("failed to read directory %q: %w", srcDir, err)
 	}
 
 	for _, entry := range entries {
@@ -55,7 +56,7 @@ func CopyDirAll(srcDir, dstDir string) error {
 
 		fileInfo, err := os.Stat(srcPath)
 		if err != nil {
-			return fmt.Errorf("unable to get file info %q: %w", srcPath, err)
+			return fmt.Errorf("failed to get file info %q: %w", srcPath, err)
 		}
 
 		stat, ok := fileInfo.Sys().(*syscall.Stat_t)
@@ -85,18 +86,18 @@ func CopyDirAll(srcDir, dstDir string) error {
 		}
 
 		if err := os.Lchown(dstPath, int(stat.Uid), int(stat.Gid)); err != nil {
-			return fmt.Errorf("unable to change owner %q: %w", dstPath, err)
+			return fmt.Errorf("failed to change owner %q: %w", dstPath, err)
 		}
 
 		srcInfo, err := entry.Info()
 		if err != nil {
-			return fmt.Errorf("unable to get file info %q: %w", entry.Name(), err)
+			return fmt.Errorf("failed to get file info %q: %w", entry.Name(), err)
 		}
 
 		isSymlink := srcInfo.Mode()&os.ModeSymlink != 0
 		if !isSymlink {
 			if err := os.Chmod(dstPath, srcInfo.Mode()); err != nil {
-				return fmt.Errorf("unable to change mode %q: %w", dstPath, err)
+				return fmt.Errorf("failed to change mode %q: %w", dstPath, err)
 			}
 		}
 	}
@@ -108,19 +109,19 @@ func CopyDirAll(srcDir, dstDir string) error {
 func CopyContent(srcFile, dstFile string) error {
 	out, err := os.OpenFile(dstFile, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0o644)
 	if err != nil {
-		return fmt.Errorf("unable to create %q: %w", dstFile, err)
+		return fmt.Errorf("failed to create %q: %w", dstFile, err)
 	}
 	defer out.Close()
 
 	in, err := os.Open(srcFile)
 	if err != nil {
-		return fmt.Errorf("unable to open %q: %w", srcFile, err)
+		return fmt.Errorf("failed to open %q: %w", srcFile, err)
 	}
 	defer in.Close()
 
 	_, err = io.Copy(out, in)
 	if err != nil {
-		return fmt.Errorf("unable to copy %q to %q: %w", in.Name(), out.Name(), err)
+		return fmt.Errorf("failed to copy %q to %q: %w", in.Name(), out.Name(), err)
 	}
 
 	return nil
@@ -140,7 +141,7 @@ func createIfNotExists(dir string, perm os.FileMode) error {
 	}
 
 	if err := os.MkdirAll(dir, perm); err != nil {
-		return fmt.Errorf("error making directory %q: %w", dir, err)
+		return fmt.Errorf("failed to make directory %q: %w", dir, err)
 	}
 
 	return nil
@@ -151,11 +152,11 @@ func createIfNotExists(dir string, perm os.FileMode) error {
 func CopySymLink(src, dst string) error {
 	target, err := os.Readlink(src)
 	if err != nil {
-		return fmt.Errorf("unable to read symlink %q: %w", src, err)
+		return fmt.Errorf("failed to read symlink %q: %w", src, err)
 	}
 
 	if err := os.Symlink(target, dst); err != nil {
-		return fmt.Errorf("unable to create symlink %q: %w", dst, err)
+		return fmt.Errorf("failed to create symlink %q: %w", dst, err)
 	}
 
 	return nil
@@ -171,9 +172,10 @@ func LongestCommonPath(paths []string) string {
 }
 
 func longestCommonPrefix(strs []string) string {
-	if len(strs) == 0 {
+	switch {
+	case len(strs) == 0:
 		return ""
-	} else if len(strs) == 1 {
+	case len(strs) == 1:
 		return strs[0]
 	}
 
@@ -207,13 +209,13 @@ func longestCommonPrefix(strs []string) string {
 func List(pattern string) ([]string, error) {
 	matches, err := doublestar.FilepathGlob(pattern)
 	if err != nil {
-		return nil, fmt.Errorf("error matching files with pattern %s: %w", pattern, err)
+		return nil, fmt.Errorf("failed to match files with pattern %s: %w", pattern, err)
 	}
 
 	for i := 0; i < len(matches); i++ {
 		absPath, err := filepath.Abs(matches[i])
 		if err != nil {
-			return nil, fmt.Errorf("error getting absolute path for %q: %w", matches[i], err)
+			return nil, fmt.Errorf("failed to get absolute path for %q: %w", matches[i], err)
 		}
 
 		matches[i] = absPath
