@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package app implements a YAML partitioning application.
 package app
 
 import (
@@ -33,16 +34,16 @@ func Init() error {
 	// inputFiles, err := filesreader.ListFiles(*MainConfig.SrcFilePath)
 	inputFiles, err := filesutil.List(*MainConfig.SrcFilePath)
 	if err != nil {
-		return fmt.Errorf("unable to list files: %w", err)
+		return fmt.Errorf("failed to list files: %w", err)
 	}
 
 	if len(inputFiles) < 1 {
-		return fmt.Errorf("no file(s) found with pattern %q", *MainConfig.SrcFilePath)
+		return fmt.Errorf("no file(s) found for pattern %q", *MainConfig.SrcFilePath)
 	}
 
 	tmpDir, err := os.MkdirTemp(os.TempDir(), "yp.")
 	if err != nil {
-		return fmt.Errorf("error creating tmp dir: %w", err)
+		return fmt.Errorf("failed to create temp dir: %w", err)
 	}
 
 	cfg, err := partitioner.NewConfig(
@@ -53,7 +54,7 @@ func Init() error {
 		partitioner.WithWorkingDirectory(tmpDir),
 	)
 	if err != nil {
-		return fmt.Errorf("unable to create partitioner config: %w", err)
+		return fmt.Errorf("failed to init partitioner config: %w", err)
 	}
 
 	mainJob = &job{
@@ -66,7 +67,7 @@ func Init() error {
 	for _, file := range inputFiles {
 		p, err := partitioner.WithConfig(cfg, file, commonPath)
 		if err != nil {
-			return fmt.Errorf("unable to create partitioner instance: %w", err)
+			return fmt.Errorf("failed to init partitioner instance: %w", err)
 		}
 
 		mainJob.partitioners[file] = p
@@ -95,7 +96,7 @@ func (job *job) run(ctx context.Context, verbose bool) error {
 	defer job.mu.Unlock()
 
 	if err := os.MkdirAll(*MainConfig.DstDirPath, 0o755); err != nil {
-		return fmt.Errorf("error making directory %q: %w", *MainConfig.DstDirPath, err)
+		return fmt.Errorf("failed to make directory %q: %w", *MainConfig.DstDirPath, err)
 	}
 
 	var (
