@@ -350,7 +350,7 @@ endif
 			exit 1; \
 		fi
 
-github-delete-release: github-token-check
+github-delete-release: github-token-check ## Delete release
 	@release_id=$$(cat $(GITHUB_RELEASE_SPEC_FILE) | grep '"id"' -m 1 | sed -E 's/.* ([[:digit:]]+)\,/\1/'); \
 	result=$$(curl -o $(GITHUB_DEBUG_FILE) -s -w "%{http_code}" \
 		-X DELETE \
