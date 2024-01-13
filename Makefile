@@ -272,7 +272,7 @@ install-gci:
 		go install github.com/daixiang0/gci@latest
 
 golangci-lint: install-golangci-lint
-	golangci-lint run
+	CGO_ENABLED=0 golangci-lint run
 
 install-golangci-lint:
 	@which golangci-lint || \
