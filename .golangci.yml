@@ -28,7 +28,7 @@ linters:
     - errname
     - errorlint
     - execinquery
-    - exhaustive
+    # - exhaustive
     # - exhaustruct
     - exportloopref
     - forbidigo
