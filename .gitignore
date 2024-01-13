@@ -3,6 +3,7 @@
 /pkg
 *.pprof
 /bin
+/build
 .idea
 .vscode
 *.swp
