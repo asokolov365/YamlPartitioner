@@ -40,7 +40,6 @@ GOARCH ?= $(shell go env GOARCH)
 # Docker stuff
 DOCKER_IMAGE_LIST := docker image ls --format '{{.Repository}}:{{.Tag}}'
 GO_BUILDER_IMAGE := golang:1.21.6-alpine
-BUILDER_IMAGE := local/go-builder:$(shell echo $(GO_BUILDER_IMAGE) | tr ':/' '--')-1
 
 GITHUB_RELEASE_SPEC_FILE="/tmp/yp-github-release"
 GITHUB_DEBUG_FILE="/tmp/yp-github-debug"
@@ -97,11 +96,10 @@ build-goos-goarch-local:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(GO_BUILDINFO)" -tags "osusergo" -o "$(ROOT)/build/$(APP_NAME)-$(GOOS)-$(GOARCH)-dev" .
 
 build-linux-amd64-docker:
-	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 $(MAKE) build-goos-goarch-docker
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(MAKE) build-goos-goarch-docker
 
 build-linux-arm64-docker:
-	DOCKER_OPTS='--env CC=/opt/cross-builder/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc' \
-	CGO_ENABLED=1 GOOS=linux GOARCH=arm64 $(MAKE) build-goos-goarch-docker
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(MAKE) build-goos-goarch-docker
 
 build-darwin-amd64-docker:
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(MAKE) build-goos-goarch-docker
@@ -119,7 +117,6 @@ build-goos-goarch-docker: package-builder
 	mkdir -p $(ROOT)/build
 	mkdir -p docker-gocache
 	docker run --rm $(DOCKER_OPTS) \
-		--user $(shell id -u):$(shell id -g) \
 		--mount type=bind,src="$(shell pwd)",dst=/YamlPartitioner \
 		--mount type=bind,src="$(shell pwd)/docker-gocache",dst=/gocache \
 		--env GOCACHE=/gocache \
@@ -127,18 +124,14 @@ build-goos-goarch-docker: package-builder
 		--env CGO_ENABLED=$(CGO_ENABLED) \
 		--env GOOS=$(GOOS) \
 		--env GOARCH=$(GOARCH) \
-		$(BUILDER_IMAGE) \
+		$(GO_BUILDER_IMAGE) \
 		go build -trimpath -buildvcs=false \
 			-ldflags "-extldflags '-static' $(GO_BUILDINFO)" \
-			-tags "osusergo musl" \
 			-o build/$(APP_NAME)-$(GOOS)-$(GOARCH)-prod .
 
-package-builder: ## Build go-builder docker image
-	($(DOCKER_IMAGE_LIST) | grep -q '$(BUILDER_IMAGE)$$') || \
-		DOCKER_BUILDKIT=1 docker build \
-			--build-arg go_builder_image=$(GO_BUILDER_IMAGE) \
-			--tag $(BUILDER_IMAGE) \
-			-f $(ROOT)/Dockerfile .
+package-builder: ## Get go-builder docker image
+	($(DOCKER_IMAGE_LIST) | grep -q '$(GO_BUILDER_IMAGE)$$') || \
+		docker pull $(GO_BUILDER_IMAGE)
 
 ##@ Release
 
@@ -175,6 +168,7 @@ release-goos-goarch: \
 	build-$(GOOS)-$(GOARCH)-docker
 	cd $(ROOT)/build && \
 		$(TAR) --transform="flags=r;s|-$(GOOS)-$(GOARCH)-prod||" \
+			--owner=root --group=root \
 			-czf $(APP_NAME)-$(GOOS)-$(GOARCH)-$(PKG_TAG).tar.gz \
 			$(APP_NAME)-$(GOOS)-$(GOARCH)-prod && \
 		$(SHA256SUM) $(APP_NAME)-$(GOOS)-$(GOARCH)-$(PKG_TAG).tar.gz \
@@ -187,7 +181,7 @@ release-goos-goarch: \
 ##@ Clean
 
 clean: ## Remove produced binaries, libraries, and temp files
-	@rm -rf $(ROOT)/build/* $(ROOT)/release/* $(ROOT)/docker-gocache $(ROOT)/tmp
+	@rm -rf $(ROOT)/build/* $(ROOT)/docker-gocache $(ROOT)/tmp
 	@rm -f coverage.txt
 
 ##@ Checks
@@ -325,8 +319,8 @@ github-create-release: github-token-check github-tag-check ## Create release dra
 
 github-upload-assets: ## Upload assets
 	@release_id=$$(cat $(GITHUB_RELEASE_SPEC_FILE) | grep '"id"' -m 1 | sed -E 's/.* ([[:digit:]]+)\,/\1/'); \
-	$(foreach file, $(wildcard release/*.tar.gz), FILE=$(file) RELEASE_ID=$${release_id} CONTENT_TYPE="application/x-gzip" $(MAKE) github-upload-asset || exit 1;) \
-	$(foreach file, $(wildcard release/*_checksums.txt), FILE=$(file) RELEASE_ID=$${release_id} CONTENT_TYPE="text/plain" $(MAKE) github-upload-asset || exit 1;) 
+	$(foreach file, $(wildcard build/*.tar.gz), FILE=$(file) RELEASE_ID=$${release_id} CONTENT_TYPE="application/x-gzip" $(MAKE) github-upload-asset || exit 1;) \
+	$(foreach file, $(wildcard build/*_checksums.txt), FILE=$(file) RELEASE_ID=$${release_id} CONTENT_TYPE="text/plain" $(MAKE) github-upload-asset || exit 1;) 
 
 github-upload-asset: github-token-check
 ifndef FILE
