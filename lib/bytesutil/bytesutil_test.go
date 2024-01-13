@@ -21,19 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRandStringAsBytes(t *testing.T) {
-	t.Parallel()
-
-	f := func(n int) {
-		b := RandStringAsBytes(n)
-		require.Equal(t, n, len(b))
-	}
-
-	for i := 0; i < 128; i++ {
-		f(i)
-	}
-}
-
 func TestToUnsafeString(t *testing.T) {
 	t.Parallel()
 

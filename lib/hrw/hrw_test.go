@@ -15,31 +15,71 @@
 package hrw
 
 import (
-	"crypto/rand"
 	"fmt"
-	"math/big"
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/asokolov365/YamlPartitioner/lib/bytesutil"
 	"github.com/cespare/xxhash/v2"
 	"github.com/stretchr/testify/require"
 )
 
-func getRandomInt(min, max int) int {
-	// calculate the max we will be using
-	bg := big.NewInt(int64(max - min))
-	// get big.Int between 0 and bg
-	n, err := rand.Int(rand.Reader, bg)
-	if err != nil {
-		panic(err.Error())
+// var letters = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") .
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+const (
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+)
+
+// RandStringAsBytes generates a random string of length n.
+func RandStringAsBytes(n int) []byte {
+	src := rand.NewSource(time.Now().UnixNano())
+
+	if n <= 0 {
+		return []byte{}
 	}
-	// add n to min to support the passed in range
-	return int(n.Int64() + int64(min))
+
+	b := make([]byte, n)
+
+	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
+	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = src.Int63(), letterIdxMax
+		}
+
+		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+			b[i] = letterBytes[idx]
+			i--
+		}
+
+		cache >>= letterIdxBits
+
+		remain--
+	}
+
+	// return *(*string)(unsafe.Pointer(&b))
+	return b
 }
 
 func randStringAsBytes() []byte {
-	length := getRandomInt(4, 64)
-	return bytesutil.RandStringAsBytes(length)
+	length := rand.Intn(64-4) + 4
+	return RandStringAsBytes(length)
+}
+
+func TestRandStringAsBytes(t *testing.T) {
+	t.Parallel()
+
+	f := func(n int) {
+		b := RandStringAsBytes(n)
+		require.Equal(t, n, len(b))
+	}
+
+	for i := 0; i < 128; i++ {
+		f(i)
+	}
 }
 
 func TestEmpty(t *testing.T) {
