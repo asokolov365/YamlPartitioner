@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package hrw implements Rendezvous
+// or highest random weight (HRW) hashing algorithm.
 package hrw
 
 import (
@@ -26,7 +28,7 @@ import (
 // https://github.com/dgryski/go-rendezvous/blob/master/rdv.go (MIT License)
 // The implementation optimizes the multiple hashing by pre-hashing
 // the nodes and using an xorshift random number generator as a cheap integer hash function.
-// A few bugs have been fixed and the hashing algorithm was changed to xxhash v2
+// A few bugs have been fixed and the hashing algorithm was changed to xxhash v2.
 type Rendezvous struct {
 	hasher     Hasher
 	nodes      map[string]int
@@ -43,15 +45,18 @@ type Rendezvous struct {
 type Hasher func(input []byte) uint64
 
 // New creates a new Rendezvous that implements Rendezvous
-// or highest random weight (HRW) hashing algorithm
+// or highest random weight (HRW) hashing algorithm.
 func New(hasher Hasher, nodes ...string) (*Rendezvous, error) {
 	memo := make(map[string]struct{}, len(nodes))
 	uniqNodes := make([]string, 0, len(nodes))
+
 	for _, node := range nodes {
 		if _, ok := memo[node]; ok {
 			return nil, fmt.Errorf("duplicated node name: %s", node)
 		}
+
 		memo[node] = struct{}{}
+
 		uniqNodes = append(uniqNodes, node)
 	}
 
@@ -71,16 +76,17 @@ func New(hasher Hasher, nodes ...string) (*Rendezvous, error) {
 	return r, nil
 }
 
-// NodeNames returns the list of node names in the Rendezvous
+// NodeNames returns the list of node names in the Rendezvous.
 func (r *Rendezvous) NodeNames() []string { return r.nodeNames }
 
-// NodesCount returns the number of nodes in the Rendezvous
+// NodesCount returns the number of nodes in the Rendezvous.
 func (r *Rendezvous) NodesCount() int { return len(r.nodeNames) }
 
-// Add adds nodes to the rendezvous
+// Add adds nodes to the rendezvous.
 func (r *Rendezvous) Add(nodes ...string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	for _, n := range nodes {
 		r.addNode(n)
 	}
@@ -90,36 +96,42 @@ func (r *Rendezvous) addNode(node string) {
 	if _, ok := r.nodes[node]; ok {
 		return
 	}
+
 	r.nodes[node] = len(r.nodeNames) // set node idx
 	r.nodeNames = append(r.nodeNames, node)
 	r.nodeHashes = append(r.nodeHashes, r.hasher(bytesutil.ToUnsafeBytes(node)))
 }
 
-// Get gets the most suitable node name for a key
+// Get gets the most suitable node name for a key.
 //
 // Use bytesutil.ToUnsafeBytes(str) for fast
-// string => []byte conversion
+// string => []byte conversion .
 func (r *Rendezvous) Get(key []byte) string {
 	if len(r.nodes) == 0 {
 		return ""
 	}
+
 	nodeIdx := r.getNBestNodesForKey(key, 1)[0]
+
 	return r.nodeNames[nodeIdx]
 }
 
-// GetN gets N most suitable node names for a key
+// GetN gets N most suitable node names for a key.
 //
 // Use bytesutil.ToUnsafeBytes(str) for fast
-// string => []byte conversion
+// string => []byte conversion .
 func (r *Rendezvous) GetN(key []byte, replicasCount int) map[string]struct{} {
 	if len(r.nodes) == 0 {
 		return map[string]struct{}{}
 	}
+
 	nodeIndecies := r.getNBestNodesForKey(key, replicasCount)
 	res := make(map[string]struct{}, len(nodeIndecies))
+
 	for _, idx := range nodeIndecies {
 		res[r.nodeNames[idx]] = struct{}{}
 	}
+
 	return res
 }
 
@@ -135,8 +147,10 @@ func (r *Rendezvous) getNBestNodesForKey(key []byte, replicasCount int) []int {
 		for i := 0; i < len(r.nodes); i++ {
 			nodeIndecies[i] = i
 		}
+
 		return nodeIndecies
 	}
+
 	if replicasCount < 1 {
 		replicasCount = 1
 	}
@@ -144,7 +158,8 @@ func (r *Rendezvous) getNBestNodesForKey(key []byte, replicasCount int) []int {
 	keyHash := r.hasher(key)
 
 	var maxIdx int
-	var maxHash = xorshiftMult64(keyHash ^ r.nodeHashes[0]) // first node
+
+	maxHash := xorshiftMult64(keyHash ^ r.nodeHashes[0]) // first node
 
 	for i, nodeHash := range r.nodeHashes[1:] {
 		if h := xorshiftMult64(keyHash ^ nodeHash); h > maxHash {
@@ -157,14 +172,16 @@ func (r *Rendezvous) getNBestNodesForKey(key []byte, replicasCount int) []int {
 	for i := 0; i < replicasCount; i++ {
 		nodeIndecies[i] = maxIdx
 		maxIdx++
+
 		if maxIdx >= len(r.nodes) {
 			maxIdx = 0
 		}
 	}
+
 	return nodeIndecies
 }
 
-// Remove removes node from the rendezvous
+// Remove removes node from the rendezvous.
 func (r *Rendezvous) Remove(node string) {
 	if len(r.nodes) == 0 {
 		return
@@ -194,5 +211,6 @@ func xorshiftMult64(x uint64) uint64 {
 	x ^= x >> 12 // a
 	x ^= x << 25 // b
 	x ^= x >> 27 // c
+
 	return x * 2685821657736338717
 }

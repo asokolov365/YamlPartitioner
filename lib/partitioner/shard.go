@@ -20,8 +20,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/asokolov365/YamlPartitioner/lib/bytesutil"
-
 	"gopkg.in/yaml.v3"
 )
 
@@ -34,6 +32,7 @@ func newShard(name string, cfg *Config) *shard {
 
 type shard struct {
 	ctx              context.Context
+	anchors          map[string]int
 	visitedPaths     map[string]struct{}
 	cfg              *Config
 	headNode         *yaml.Node
@@ -42,13 +41,14 @@ type shard struct {
 	itemsCountAfter  int
 }
 
-// Reset sets the shard to its initial state
+// Reset sets the shard to its initial state.
 func (sh *shard) Reset() {
 	sh.ctx = nil
 	sh.headNode = nil
 	sh.itemsCountBefore = 0
 	sh.itemsCountAfter = 0
-	sh.visitedPaths = map[string]struct{}{}
+	sh.anchors = make(map[string]int, 100)
+	sh.visitedPaths = make(map[string]struct{}, 100)
 }
 
 // Run decodes input yaml into a partitioned tree of yaml Nodes.
@@ -65,17 +65,18 @@ func (sh *shard) Run(ctx context.Context, input []byte, output io.Writer) error 
 	// Decode input yaml into a partitioned tree of yaml Nodes.
 	// This calls shard.UnmarshalYAML()
 	if err = yaml.Unmarshal(input, sh); err != nil {
-		return fmt.Errorf("error unmarshal yaml for %s: %w", sh.name, err)
+		return fmt.Errorf("failed to unmarshal yaml for %s: %w", sh.name, err)
 	}
 
 	// Encode the partitioned tree of yaml Nodes back to yaml format
 	// with configured shard writer
 	yamlEncoder := yaml.NewEncoder(output)
 	yamlEncoder.SetIndent(sh.cfg.resultYamlIndent)
+
 	defer yamlEncoder.Close()
 
 	if err := yamlEncoder.Encode(sh.headNode); err != nil {
-		return fmt.Errorf("error marshal yaml for %s: %w", sh.name, err)
+		return fmt.Errorf("failed to marshal yaml for %s: %w", sh.name, err)
 	}
 
 	return nil
@@ -100,6 +101,7 @@ func (sh *shard) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	sh.headNode = value
+
 	return nil
 }
 
@@ -107,14 +109,14 @@ func (sh *shard) descendRecursively(ctx context.Context, node *yaml.Node, currPa
 	// Checking context before each dive
 	select {
 	case <-ctx.Done():
-		// fmt.Printf("%s canceled\n", sh.name)
-		return ctx.Err() // error somewhere, terminate
+		return fmt.Errorf("%s canceled: %w", sh.name, ctx.Err()) // error somewhere, terminate
 	default: // default is a must to avoid blocking
 	}
 
 	defer sh.markVisited(currPath)
 
 	atSplitPoint := false
+
 	switch sh.whereAt(currPath) {
 	case 0:
 		atSplitPoint = true
@@ -122,64 +124,81 @@ func (sh *shard) descendRecursively(ctx context.Context, node *yaml.Node, currPa
 		return nil
 	}
 
-	switch node.Kind {
-	case yaml.SequenceNode:
-		if atSplitPoint {
-			sh.itemsCountBefore += len(node.Content)
-			newContent := []*yaml.Node{}
+	switch node.Kind { //nolint
+	case yaml.SequenceNode, yaml.MappingNode:
+		step := 1
 
-			for _, item := range node.Content {
-				valueAsBytes, err := yaml.Marshal(item)
-				if err != nil {
-					return err
-				}
-				nodeNames := sh.cfg.consistentHashing.GetN(valueAsBytes, sh.cfg.replicasCount)
-				if _, ok := nodeNames[sh.name]; ok {
-					newContent = append(newContent, item)
-				}
+		if node.Kind == yaml.MappingNode {
+			// step is 2 because yaml.MappingNode item is a kv pair
+			step = 2
+		}
+
+		if atSplitPoint {
+			itemsCountBefore := len(node.Content) / step
+
+			if len(node.Anchor) > 0 { // SplitPoint is AnchorNode
+				// Store the number of items in the AnchorNode
+				sh.anchors[node.Anchor] = itemsCountBefore
 			}
+
+			// Increment total items count before partitioning
+			sh.itemsCountBefore += itemsCountBefore
+
+			newContent, err := sh.partitionNode(node.Kind, node.Content)
+			if err != nil {
+				return err
+			}
+
 			node.Content = newContent
-			sh.itemsCountAfter += len(newContent)
+			sh.itemsCountAfter += len(newContent) / step
+
 			return nil
 		}
 
-		for _, item := range node.Content {
-			if err := sh.descendRecursively(ctx, item, append(currPath, "*")); err != nil {
-				return err
-			}
-		}
+		for i := 0; i < len(node.Content); i += step {
+			var (
+				key, item *yaml.Node
+				pathElem  string
+			)
 
-	case yaml.MappingNode:
-		var key, value *yaml.Node
-		if atSplitPoint {
-			// divide by 2 because yaml.MappingNode item is key and value pair
-			sh.itemsCountBefore += len(node.Content) / 2
-			newContent := []*yaml.Node{}
-
-			for i := 0; i < len(node.Content); i += 2 {
+			if node.Kind == yaml.MappingNode {
 				key = node.Content[i]
-				value = node.Content[i+1]
-
-				nodeNames := sh.cfg.consistentHashing.GetN(bytesutil.ToUnsafeBytes(key.Value), sh.cfg.replicasCount)
-				if _, ok := nodeNames[sh.name]; ok {
-					newContent = append(newContent, key, value)
-				}
+				item = node.Content[i+1]
+				pathElem = key.Value
+			} else {
+				item = node.Content[i]
+				pathElem = "*"
 			}
-			node.Content = newContent
-			sh.itemsCountAfter += len(newContent) / 2
-			return nil
-		}
 
-		for i := 0; i < len(node.Content); i += 2 {
-			key = node.Content[i]
-			value = node.Content[i+1]
-			if err := sh.descendRecursively(ctx, value, append(currPath, key.Value)); err != nil {
+			if err := sh.descendRecursively(ctx, item, append(currPath, pathElem)); err != nil {
 				return err
 			}
 		}
+
 	case yaml.AliasNode:
-		// Always pass AliasNodes as is
-		return nil
+		if atSplitPoint {
+			// Increment total items count before partitioning
+			sh.itemsCountBefore += sh.anchors[node.Value]
+
+			var step int
+
+			switch node.Alias.Kind { //nolint
+			case yaml.SequenceNode:
+				step = 1
+			case yaml.MappingNode:
+				// step is 2 because yaml.MappingNode item is a kv pair
+				step = 2
+			default:
+				return fmt.Errorf("invalid split point path: node at %q is not shardable", sh.cfg.splitPoint)
+			}
+
+			// AnchorNode has already been processed,
+			// so its Content length is how many items it has after processing.
+			sh.itemsCountAfter += len(node.Alias.Content) / step
+
+			return nil
+		}
+
 	default:
 		if atSplitPoint {
 			return fmt.Errorf("invalid split point path: node at %q is not shardable", sh.cfg.splitPoint)
@@ -187,6 +206,75 @@ func (sh *shard) descendRecursively(ctx context.Context, node *yaml.Node, currPa
 	}
 
 	return nil
+}
+
+func (sh *shard) partitionNode(nodeKind yaml.Kind, oldContent []*yaml.Node) ([]*yaml.Node, error) {
+	var (
+		key, item *yaml.Node
+		step      int
+	)
+
+	newContent := []*yaml.Node{}
+
+	switch nodeKind { //nolint
+	case yaml.SequenceNode:
+		step = 1
+	case yaml.MappingNode:
+		// step is 2 because yaml.MappingNode item is a kv pair
+		step = 2
+	default:
+		return nil, fmt.Errorf("either SequenceNode or MappingNode can be partitioned")
+	}
+
+	for i := 0; i < len(oldContent); i += step {
+		if nodeKind == yaml.MappingNode {
+			key = oldContent[i]
+			item = oldContent[i+1]
+		} else {
+			item = oldContent[i]
+		}
+
+		switch {
+		case item.Kind == yaml.AliasNode:
+			// ok means the AnchorNode for this AliasNode has already been processed
+			if match, ok := sh.anchors[item.Value]; ok {
+				// match > 0 means the yaml.Node belongs to this shard
+				if match > 0 {
+					if nodeKind == yaml.MappingNode {
+						newContent = append(newContent, key, item)
+					} else {
+						newContent = append(newContent, item)
+					}
+				}
+			}
+
+			continue
+
+		case len(item.Anchor) > 0: // AnchorNode
+			sh.anchors[item.Anchor] = 0
+		}
+
+		itemAsBytes, err := yaml.Marshal(item)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal %v: %w", item, err)
+		}
+
+		nodeNames := sh.cfg.consistentHashing.GetN(itemAsBytes, sh.cfg.replicasCount)
+		if _, ok := nodeNames[sh.name]; ok {
+			if nodeKind == yaml.MappingNode {
+				newContent = append(newContent, key, item)
+			} else {
+				newContent = append(newContent, item)
+			}
+
+			if len(item.Anchor) > 0 {
+				// mark AnchorNode as belonging to this shard
+				sh.anchors[item.Anchor] = step // either 1 or 2
+			}
+		}
+	}
+
+	return newContent, nil
 }
 
 func (sh *shard) markVisited(path []string) {
@@ -198,14 +286,17 @@ func (sh *shard) whereAt(path []string) int {
 	if len(path) > maxDeep {
 		return 1
 	}
+
 	for i := 0; i < len(path); i++ {
 		spElem, _ := sh.cfg.splitPoint.Elem(i)
 		if path[i] != spElem {
 			return 1
 		}
 	}
+
 	if len(path) == maxDeep {
 		return 0
 	}
+
 	return -1
 }

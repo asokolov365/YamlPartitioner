@@ -3,10 +3,11 @@
 /pkg
 *.pprof
 /bin
+/build
 .idea
 .vscode
 *.swp
-/gocache-for-docker
+/docker-gocache
 .DS_store
 Gemfile.lock
 /_site

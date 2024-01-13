@@ -21,23 +21,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRandStringAsBytes(t *testing.T) {
-	f := func(n int) {
-		b := RandStringAsBytes(n)
-		require.Equal(t, n, len(b))
-		// fmt.Println(string(b))
-	}
-	for i := 0; i < 128; i++ {
-		f(i)
-	}
-}
-
 func TestToUnsafeString(t *testing.T) {
+	t.Parallel()
+
 	b := []byte("str")
 	require.Equal(t, "str", ToUnsafeString(b))
 }
 
 func TestToUnsafeBytes(t *testing.T) {
+	t.Parallel()
+
 	s := "str"
 	if !bytes.Equal([]byte("str"), ToUnsafeBytes(s)) {
 		t.Fatalf(`[]bytes(%s) doesnt equal to %s `, s, s)

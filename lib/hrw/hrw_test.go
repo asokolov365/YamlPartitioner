@@ -15,35 +15,76 @@
 package hrw
 
 import (
-	"crypto/rand"
 	"fmt"
-	"math/big"
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/asokolov365/YamlPartitioner/lib/bytesutil"
-
 	"github.com/cespare/xxhash/v2"
 	"github.com/stretchr/testify/require"
 )
 
-func getRandomInt(min, max int) int {
-	// calculate the max we will be using
-	bg := big.NewInt(int64(max - min))
-	// get big.Int between 0 and bg
-	n, err := rand.Int(rand.Reader, bg)
-	if err != nil {
-		panic(err.Error())
+// var letters = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") .
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+const (
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+)
+
+// RandStringAsBytes generates a random string of length n.
+func RandStringAsBytes(n int) []byte {
+	src := rand.NewSource(time.Now().UnixNano())
+
+	if n <= 0 {
+		return []byte{}
 	}
-	// add n to min to support the passed in range
-	return int(n.Int64() + int64(min))
+
+	b := make([]byte, n)
+
+	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
+	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = src.Int63(), letterIdxMax
+		}
+
+		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+			b[i] = letterBytes[idx]
+			i--
+		}
+
+		cache >>= letterIdxBits
+
+		remain--
+	}
+
+	// return *(*string)(unsafe.Pointer(&b))
+	return b
 }
 
 func randStringAsBytes() []byte {
-	length := getRandomInt(4, 64)
-	return bytesutil.RandStringAsBytes(length)
+	length := rand.Intn(64-4) + 4
+	return RandStringAsBytes(length)
+}
+
+func TestRandStringAsBytes(t *testing.T) {
+	t.Parallel()
+
+	f := func(n int) {
+		b := RandStringAsBytes(n)
+		require.Equal(t, n, len(b))
+	}
+
+	for i := 0; i < 128; i++ {
+		f(i)
+	}
 }
 
 func TestEmpty(t *testing.T) {
+	t.Parallel()
+
 	r, err := New(xxhash.Sum64)
 	require.NoError(t, err)
 	require.Empty(t, r.Get([]byte("hello")))
@@ -52,11 +93,15 @@ func TestEmpty(t *testing.T) {
 }
 
 func TestNew_Okay(t *testing.T) {
+	t.Parallel()
+
 	nodeNum := 5
 	nodes := make([]string, nodeNum)
+
 	for i := 0; i < nodeNum; i++ {
 		nodes[i] = fmt.Sprintf("node%d", i)
 	}
+
 	r, err := New(xxhash.Sum64, nodes...)
 	require.NoError(t, err)
 	require.Equal(t, nodeNum, r.NodesCount())
@@ -67,6 +112,8 @@ func TestNew_Okay(t *testing.T) {
 }
 
 func TestNew_WithDuplicates(t *testing.T) {
+	t.Parallel()
+
 	nodes := []string{"node1", "node2", "node3", "node1", "node2", "node1"}
 	_, err := New(xxhash.Sum64, nodes...)
 	require.Error(t, err)
@@ -74,9 +121,12 @@ func TestNew_WithDuplicates(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
+	t.Parallel()
+
 	nodeNum := 5
 	r, err := New(xxhash.Sum64)
 	require.NoError(t, err)
+
 	for i := 0; i < nodeNum; i++ {
 		r.Add(fmt.Sprintf("node%d", i))
 	}
@@ -84,6 +134,7 @@ func TestAdd(t *testing.T) {
 	require.Equal(t, nodeNum, len(r.nodes))
 	require.Equal(t, nodeNum, len(r.nodeNames))
 	require.Equal(t, nodeNum, len(r.nodeHashes))
+
 	// Add once again
 	for i := 0; i < nodeNum; i++ {
 		r.Add(fmt.Sprintf("node%d", i))
@@ -95,11 +146,15 @@ func TestAdd(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
+	t.Parallel()
+
 	nodeNum := 5
 	nodes := make([]string, nodeNum)
+
 	for i := 0; i < nodeNum; i++ {
 		nodes[i] = fmt.Sprintf("node%d", i)
 	}
+
 	r, err := New(xxhash.Sum64, nodes...)
 	require.NoError(t, err)
 	require.Equal(t, nodeNum, len(r.nodes))
@@ -124,6 +179,8 @@ func TestRemove(t *testing.T) {
 }
 
 func TestDistributeOver1(t *testing.T) {
+	t.Parallel()
+
 	nodeName := "default"
 	nodes := []string{nodeName}
 
@@ -131,7 +188,7 @@ func TestDistributeOver1(t *testing.T) {
 	require.NoError(t, err)
 
 	numKeys := 100
-	var buckets = map[string]int{nodeName: 0}
+	buckets := map[string]int{nodeName: 0}
 
 	for i := 0; i < numKeys; i++ {
 		n := r.Get(randStringAsBytes())
@@ -142,8 +199,11 @@ func TestDistributeOver1(t *testing.T) {
 }
 
 func TestGetN(t *testing.T) {
+	t.Parallel()
+
 	nodeNum := 3
 	nodes := make([]string, nodeNum)
+
 	for i := 0; i < nodeNum; i++ {
 		nodes[i] = fmt.Sprintf("node%d", i)
 	}
@@ -152,23 +212,30 @@ func TestGetN(t *testing.T) {
 	require.NoError(t, err)
 
 	numKeys := 10
-	var buckets = make(map[string]int, nodeNum)
+	buckets := make(map[string]int, nodeNum)
+
 	var retNodes map[string]struct{}
+
 	for i := 0; i < numKeys; i++ {
 		retNodes = r.GetN(randStringAsBytes(), 5)
 		require.Equal(t, nodeNum, len(retNodes))
+
 		for node := range retNodes {
 			buckets[node]++
 		}
 	}
+
 	for _, node := range nodes {
 		require.Equal(t, numKeys, buckets[node])
 	}
 }
 
 func TestDistributeOver5(t *testing.T) {
+	t.Parallel()
+
 	nodeNum := 5
 	nodes := make([]string, nodeNum)
+
 	for i := 0; i < nodeNum; i++ {
 		nodes[i] = fmt.Sprintf("node%d", i)
 	}
@@ -177,30 +244,39 @@ func TestDistributeOver5(t *testing.T) {
 	require.NoError(t, err)
 
 	numKeys := 10000
-	var buckets = make(map[string]int, nodeNum)
+	buckets := make(map[string]int, nodeNum)
+
 	var node string
+
 	for i := 0; i < numKeys; i++ {
-		if i%2 == 0 {
+		switch {
+		case i%2 == 0:
 			node = r.Get(randStringAsBytes())
-		} else if i%3 == 0 {
+
+		case i%3 == 0:
 			retNodes := r.GetN(randStringAsBytes(), 0)
 			require.Equal(t, 1, len(retNodes))
+
 			for n := range retNodes {
 				node = n
 			}
-		} else {
+
+		default:
 			retNodes := r.GetN(randStringAsBytes(), 1)
 			require.Equal(t, 1, len(retNodes))
+
 			for n := range retNodes {
 				node = n
 			}
 		}
+
 		require.NotEmpty(t, node)
 		buckets[node]++
 	}
 
 	lowerThreshold := int(float32(numKeys) * 0.15)
 	higherThreshold := int(float32(numKeys) * 0.25)
+
 	for n, l := range buckets {
 		// fmt.Printf("%s got %d\n", n, l)
 		require.Less(t, lowerThreshold, l,
@@ -211,8 +287,11 @@ func TestDistributeOver5(t *testing.T) {
 }
 
 func TestDistributeOver8(t *testing.T) {
+	t.Parallel()
+
 	nodeNum := 8
 	nodes := make([]string, nodeNum)
+
 	for i := 0; i < nodeNum; i++ {
 		nodes[i] = fmt.Sprintf("node%d", i)
 	}
@@ -221,30 +300,39 @@ func TestDistributeOver8(t *testing.T) {
 	require.NoError(t, err)
 
 	numKeys := 10000
-	var buckets = make(map[string]int, nodeNum)
+	buckets := make(map[string]int, nodeNum)
+
 	var node string
+
 	for i := 0; i < numKeys; i++ {
-		if i%2 == 0 {
+		switch {
+		case i%2 == 0:
 			node = r.Get(randStringAsBytes())
-		} else if i%3 == 0 {
+
+		case i%3 == 0:
 			retNodes := r.GetN(randStringAsBytes(), 0)
 			require.Equal(t, 1, len(retNodes))
+
 			for n := range retNodes {
 				node = n
 			}
-		} else {
+
+		default:
 			retNodes := r.GetN(randStringAsBytes(), 1)
 			require.Equal(t, 1, len(retNodes))
+
 			for n := range retNodes {
 				node = n
 			}
 		}
+
 		require.NotEmpty(t, node)
 		buckets[node]++
 	}
 
 	lowerThreshold := int(float32(numKeys) * 0.11)
 	higherThreshold := int(float32(numKeys) * 0.16)
+
 	for n, l := range buckets {
 		// fmt.Printf("%s got %d\n", n, l)
 		require.Less(t, lowerThreshold, l,
@@ -255,11 +343,15 @@ func TestDistributeOver8(t *testing.T) {
 }
 
 func TestSameDistribution(t *testing.T) {
+	t.Parallel()
+
 	nodeNum := 8
 	nodes := make([]string, nodeNum)
+
 	for i := 0; i < nodeNum; i++ {
 		nodes[i] = fmt.Sprintf("node%d", i)
 	}
+
 	r1, err := New(xxhash.Sum64, nodes...)
 	require.NoError(t, err)
 
@@ -267,29 +359,36 @@ func TestSameDistribution(t *testing.T) {
 	require.NoError(t, err)
 
 	numKeys := 10000
-	var buckets1 = make(map[string]int, nodeNum)
-	var buckets2 = make(map[string]int, nodeNum)
+	buckets1 := make(map[string]int, nodeNum)
+	buckets2 := make(map[string]int, nodeNum)
 
 	for i := 0; i < numKeys; i++ {
 		key := randStringAsBytes()
 		// fmt.Println(key)
 		n1 := r1.Get(key)
 		require.NotEmpty(t, n1)
+
 		n2 := r2.Get(key)
 		require.NotEmpty(t, n2)
 		require.Equal(t, n1, n2)
+
 		buckets1[n1]++
 		buckets2[n2]++
 	}
+
 	require.Equal(t, len(buckets1), len(buckets2))
+
 	for n := range buckets1 {
 		require.Equal(t, buckets1[n], buckets2[n])
 	}
 }
 
 func TestMovers(t *testing.T) {
+	t.Parallel()
+
 	nodeNum := 9
 	nodes := make([]string, nodeNum)
+
 	for i := 0; i < nodeNum; i++ {
 		nodes[i] = fmt.Sprintf("node%d", i)
 	}
@@ -298,7 +397,7 @@ func TestMovers(t *testing.T) {
 	require.NoError(t, err)
 
 	numKeys := 10000
-	var kaysAlloc = make(map[string]string, numKeys)
+	kaysAlloc := make(map[string]string, numKeys)
 
 	moversThreshold := int(float32(numKeys) / float32(nodeNum))
 
@@ -314,15 +413,18 @@ func TestMovers(t *testing.T) {
 
 	totalMovers := 0
 	unnecessaryMovers := 0
+
 	for key, prevNode := range kaysAlloc {
 		n := r.Get(bytesutil.ToUnsafeBytes(key))
 		if n != prevNode {
 			totalMovers++
+
 			if n != newNode {
 				unnecessaryMovers++
 			}
 		}
 	}
+
 	require.Equal(t, 0, unnecessaryMovers)
 	require.Less(t, totalMovers, moversThreshold)
 }

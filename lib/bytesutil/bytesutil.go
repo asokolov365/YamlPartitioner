@@ -12,45 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package bytesutil implements utility routines for manipulating byte slices.
 package bytesutil
 
 import (
-	"math/rand"
-	"time"
 	"unsafe"
 )
-
-// var letters = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-const (
-	letterIdxBits = 6                    // 6 bits to represent a letter index
-	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-)
-
-var src = rand.NewSource(time.Now().UnixNano())
-
-// RandStringAsBytes generates a random string of length n.
-func RandStringAsBytes(n int) []byte {
-	if n <= 0 {
-		return []byte{}
-	}
-	b := make([]byte, n)
-	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
-	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
-		if remain == 0 {
-			cache, remain = src.Int63(), letterIdxMax
-		}
-		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
-			b[i] = letterBytes[idx]
-			i--
-		}
-		cache >>= letterIdxBits
-		remain--
-	}
-	return b
-	// return *(*string)(unsafe.Pointer(&b))
-}
 
 // ToUnsafeString converts b to string without memory allocations.
 //
@@ -67,10 +34,10 @@ func ToUnsafeBytes(s string) []byte {
 }
 
 // func ToUnsafeBytes(s string) (b []byte) {
-// 	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
+// 	strh := (*reflect.StringHeader)(unsafe.Pointer(&s))
 // 	slh := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-// 	slh.Data = sh.Data
-// 	slh.Len = sh.Len
-// 	slh.Cap = sh.Len
+// 	slh.Data = strh.Data
+// 	slh.Len = strh.Len
+// 	slh.Cap = strh.Len
 // 	return b
 // }

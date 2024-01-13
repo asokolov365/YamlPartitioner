@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package filesutil implements utility routines for working with files.
 package filesutil
 
 import (
@@ -32,9 +33,11 @@ func MoveDirAll(srcDir, dstDir string) error {
 	if err := CopyDirAll(srcDir, dstDir); err != nil {
 		return err
 	}
+
 	if err := os.RemoveAll(srcDir); err != nil {
-		return err
+		return fmt.Errorf("failed to remove %q: %w", srcDir, err)
 	}
+
 	return nil
 }
 
@@ -44,7 +47,7 @@ func MoveDirAll(srcDir, dstDir string) error {
 func CopyDirAll(srcDir, dstDir string) error {
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read directory %q: %w", srcDir, err)
 	}
 
 	for _, entry := range entries {
@@ -53,7 +56,7 @@ func CopyDirAll(srcDir, dstDir string) error {
 
 		fileInfo, err := os.Stat(srcPath)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get file info %q: %w", srcPath, err)
 		}
 
 		stat, ok := fileInfo.Sys().(*syscall.Stat_t)
@@ -63,16 +66,19 @@ func CopyDirAll(srcDir, dstDir string) error {
 
 		switch fileInfo.Mode() & os.ModeType {
 		case os.ModeDir:
-			if err := createIfNotExists(dstPath, 0755); err != nil {
+			if err := createIfNotExists(dstPath, 0o755); err != nil {
 				return err
 			}
+
 			if err := CopyDirAll(srcPath, dstPath); err != nil {
 				return err
 			}
+
 		case os.ModeSymlink:
 			if err := CopySymLink(srcPath, dstPath); err != nil {
 				return err
 			}
+
 		default:
 			if err := CopyContent(srcPath, dstPath); err != nil {
 				return err
@@ -80,41 +86,42 @@ func CopyDirAll(srcDir, dstDir string) error {
 		}
 
 		if err := os.Lchown(dstPath, int(stat.Uid), int(stat.Gid)); err != nil {
-			return err
+			return fmt.Errorf("failed to change owner %q: %w", dstPath, err)
 		}
 
 		srcInfo, err := entry.Info()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get file info %q: %w", entry.Name(), err)
 		}
 
 		isSymlink := srcInfo.Mode()&os.ModeSymlink != 0
 		if !isSymlink {
 			if err := os.Chmod(dstPath, srcInfo.Mode()); err != nil {
-				return err
+				return fmt.Errorf("failed to change mode %q: %w", dstPath, err)
 			}
 		}
 	}
+
 	return nil
 }
 
 // CopyContent copies srcFile to dstFile with io.Copy.
 func CopyContent(srcFile, dstFile string) error {
-	out, err := os.OpenFile(dstFile, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
+	out, err := os.OpenFile(dstFile, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0o644)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create %q: %w", dstFile, err)
 	}
 	defer out.Close()
 
 	in, err := os.Open(srcFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open %q: %w", srcFile, err)
 	}
 	defer in.Close()
 
 	_, err = io.Copy(out, in)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to copy %q to %q: %w", in.Name(), out.Name(), err)
 	}
 
 	return nil
@@ -124,6 +131,7 @@ func exists(filePath string) bool {
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		return false
 	}
+
 	return true
 }
 
@@ -133,7 +141,7 @@ func createIfNotExists(dir string, perm os.FileMode) error {
 	}
 
 	if err := os.MkdirAll(dir, perm); err != nil {
-		return fmt.Errorf("error making directory %q: %w", dir, err)
+		return fmt.Errorf("failed to make directory %q: %w", dir, err)
 	}
 
 	return nil
@@ -144,9 +152,14 @@ func createIfNotExists(dir string, perm os.FileMode) error {
 func CopySymLink(src, dst string) error {
 	target, err := os.Readlink(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read symlink %q: %w", src, err)
 	}
-	return os.Symlink(target, dst)
+
+	if err := os.Symlink(target, dst); err != nil {
+		return fmt.Errorf("failed to create symlink %q: %w", dst, err)
+	}
+
+	return nil
 }
 
 // LongestCommonPath returns the longest common path for
@@ -154,13 +167,15 @@ func CopySymLink(src, dst string) error {
 func LongestCommonPath(paths []string) string {
 	commonPrefix := longestCommonPrefix(paths)
 	idx := strings.LastIndex(commonPrefix, "/")
+
 	return commonPrefix[:idx+1]
 }
 
 func longestCommonPrefix(strs []string) string {
-	if len(strs) == 0 {
+	switch {
+	case len(strs) == 0:
 		return ""
-	} else if len(strs) == 1 {
+	case len(strs) == 1:
 		return strs[0]
 	}
 
@@ -175,6 +190,7 @@ func longestCommonPrefix(strs []string) string {
 	}
 
 	var longestPrefix strings.Builder
+
 	stop := false
 
 	for i := 0; i < maxLen && !stop; i++ {
@@ -184,6 +200,7 @@ func longestCommonPrefix(strs []string) string {
 			stop = true
 		}
 	}
+
 	return longestPrefix.String()
 }
 
@@ -192,14 +209,17 @@ func longestCommonPrefix(strs []string) string {
 func List(pattern string) ([]string, error) {
 	matches, err := doublestar.FilepathGlob(pattern)
 	if err != nil {
-		return nil, fmt.Errorf("error matching files with pattern %s: %w", pattern, err)
+		return nil, fmt.Errorf("failed to match files with pattern %s: %w", pattern, err)
 	}
+
 	for i := 0; i < len(matches); i++ {
 		absPath, err := filepath.Abs(matches[i])
 		if err != nil {
-			return nil, fmt.Errorf("error getting absolute path for %s: %w", matches[i], err)
+			return nil, fmt.Errorf("failed to get absolute path for %q: %w", matches[i], err)
 		}
+
 		matches[i] = absPath
 	}
+
 	return matches, nil
 }

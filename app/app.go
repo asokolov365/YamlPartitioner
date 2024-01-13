@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package app implements a YAML partitioning application.
 package app
 
 import (
@@ -26,24 +27,23 @@ import (
 	"github.com/asokolov365/YamlPartitioner/lib/partitioner"
 )
 
-var (
-	mainJob *job
-)
+var mainJob *job
 
 // Init initializes the partitioning job.
 func Init() error {
 	// inputFiles, err := filesreader.ListFiles(*MainConfig.SrcFilePath)
 	inputFiles, err := filesutil.List(*MainConfig.SrcFilePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to list files: %w", err)
 	}
+
 	if len(inputFiles) < 1 {
-		return fmt.Errorf("no file(s) found with pattern %q", *MainConfig.SrcFilePath)
+		return fmt.Errorf("no file(s) found for pattern %q", *MainConfig.SrcFilePath)
 	}
 
 	tmpDir, err := os.MkdirTemp(os.TempDir(), "yp.")
 	if err != nil {
-		return fmt.Errorf("error creating tmp dir: %w", err)
+		return fmt.Errorf("failed to create temp dir: %w", err)
 	}
 
 	cfg, err := partitioner.NewConfig(
@@ -54,7 +54,7 @@ func Init() error {
 		partitioner.WithWorkingDirectory(tmpDir),
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to init partitioner config: %w", err)
 	}
 
 	mainJob = &job{
@@ -67,10 +67,12 @@ func Init() error {
 	for _, file := range inputFiles {
 		p, err := partitioner.WithConfig(cfg, file, commonPath)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to init partitioner instance: %w", err)
 		}
+
 		mainJob.partitioners[file] = p
 	}
+
 	return nil
 }
 
@@ -85,6 +87,7 @@ func Run(ctx context.Context, verbose bool) error {
 	if mainJob == nil {
 		panic("BUG: mainJob is not initialized")
 	}
+
 	return mainJob.run(ctx, verbose)
 }
 
@@ -92,8 +95,8 @@ func (job *job) run(ctx context.Context, verbose bool) error {
 	job.mu.Lock()
 	defer job.mu.Unlock()
 
-	if err := os.MkdirAll(*MainConfig.DstDirPath, 0755); err != nil {
-		return fmt.Errorf("error making directory %q: %w", *MainConfig.DstDirPath, err)
+	if err := os.MkdirAll(*MainConfig.DstDirPath, 0o755); err != nil {
+		return fmt.Errorf("failed to make directory %q: %w", *MainConfig.DstDirPath, err)
 	}
 
 	var (
@@ -107,10 +110,12 @@ func (job *job) run(ctx context.Context, verbose bool) error {
 
 	for _, prt := range job.partitioners {
 		wg.Add(1)
+
 		go func(p *partitioner.Partitioner) {
 			if err := p.Run(ctx); err != nil {
 				errs = append(errs, fmt.Sprintf("[!] %s", err.Error()))
 			}
+
 			wg.Done()
 		}(prt)
 	}
@@ -125,7 +130,8 @@ func (job *job) run(ctx context.Context, verbose bool) error {
 	select {
 	case <-ctx.Done():
 		os.RemoveAll(job.cfg.WorkDir())
-		return ctx.Err()
+
+		return fmt.Errorf("context canceled: %w", ctx.Err())
 
 	default:
 		if err := filesutil.MoveDirAll(job.cfg.WorkDir(), *MainConfig.DstDirPath); err != nil {
@@ -135,6 +141,7 @@ func (job *job) run(ctx context.Context, verbose bool) error {
 
 	for _, p := range job.partitioners {
 		reports = append(reports, fmt.Sprintf("===> %s", p.Report()))
+
 		for shardName, count := range p.ShardItemsCount() {
 			itemsCount[shardName] += count
 		}
@@ -147,6 +154,7 @@ func (job *job) run(ctx context.Context, verbose bool) error {
 		if *MainConfig.ShardID >= 0 && *MainConfig.ShardID != i {
 			continue
 		}
+
 		fmt.Fprintf(os.Stderr, "Shard %q got %d items in total\n", name, itemsCount[name])
 	}
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package cmd implements a CLI command.
 package cmd
 
 import (
@@ -74,22 +75,6 @@ var rootCmd = &cobra.Command{
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 		defer stop()
 
-		// Testing signal
-		// p, err := os.FindProcess(os.Getpid())
-		// if err != nil {
-		// 	return err
-		// }
-		// On a Unix-like system, pressing Ctrl+C on a keyboard sends a
-		// SIGINT signal to the process of the program in execution.
-		//
-		// This example simulates that by sending a SIGINT signal to itself.
-		// go func() {
-		// 	time.Sleep(10 * time.Millisecond)
-		// 	if err := p.Signal(os.Interrupt); err != nil {
-		// 		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-		// 	}
-		// }()
-
 		if err := app.Run(ctx, verbose); err != nil {
 			return err
 		}
@@ -97,7 +82,7 @@ var rootCmd = &cobra.Command{
 		return nil
 	},
 
-	Version: fmt.Sprintf("Version: %s, GitCommit: %s\n", version.Version, version.GitCommit),
+	Version: fmt.Sprintf("Version: %s\n", version.Version),
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -118,7 +103,7 @@ var (
 func init() {
 	var err error
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Print report of partitioning of each input YAML file.")
-	rootCmd.SetVersionTemplate(`{{printf "YamlPartitioner *yp* %s" .Version}}`)
+	rootCmd.SetVersionTemplate(`{{printf "YamlPartitioner %s" .Version}}`)
 	vpr = viper.New()
 	// This inits app.MainConfig with default values
 	app.InitConfig()

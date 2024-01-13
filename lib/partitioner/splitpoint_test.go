@@ -21,17 +21,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_splitPoint(t *testing.T) {
+func Test_SplitPoint(t *testing.T) {
+	t.Parallel()
+
 	f := func(s string) {
 		t.Helper()
+
 		sp, err := newSplitPoint(s)
 		require.NoError(t, err)
 		require.Equal(t, s, sp.String())
 		require.Equal(t, strings.Split(s, "."), sp.Slice())
 
-		len := sp.Len()
-		_, err = sp.Elem(len + 1)
+		_, err = sp.Elem(sp.Len() + 1)
 		require.Error(t, err)
+
 		_, err = sp.Elem(-1)
 		require.Error(t, err)
 	}
@@ -40,9 +43,12 @@ func Test_splitPoint(t *testing.T) {
 	f("module")
 }
 
-func Test_splitPointError(t *testing.T) {
+func Test_SplitPointError(t *testing.T) {
+	t.Parallel()
+
 	f := func(s string) {
 		t.Helper()
+
 		_, err := newSplitPoint(s)
 		require.ErrorContains(t, err, "invalid split point path")
 	}

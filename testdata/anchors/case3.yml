@@ -1,0 +1,52 @@
+groups:
+  - name: rules-dc1
+    concurrency: &default-concurrency 4
+    interval: 5m
+    params:
+      extra_filters:
+        - '{datacenter=~"dc1.*"}'
+    rules:
+      expr01: &id001 avg(100 - (rate(node_cpu_seconds_total{mode='idle'}[1m]) * 100)) without (cpu)
+      expr02: &id002 avg(100 - (rate(windows_cpu_time_total{mode='idle'}[1m]) * 100)) without (core)
+      expr03: &id003 avg(100 - (rate(node_cpu_seconds_total{mode='idle'}[1m]) * 100)) by (region,datacenter)
+      expr04: &id004 avg(100 - (rate(windows_cpu_time_total{mode='idle'}[1m]) * 100)) by (region,datacenter)
+      expr05: &id005 avg(100 - (rate(node_cpu_seconds_total{mode='idle'}[1m]) * 100)) by (region,datacenter,superfarm)
+      expr06: &id006 avg(100 - (rate(windows_cpu_time_total{mode='idle'}[1m]) * 100)) by (region,datacenter,superfarm)
+      expr07: &id007 avg(node_memory_Active_bytes/node_memory_MemTotal_bytes) by (region, datacenter)
+      expr08: &id008 avg(windows_os_physical_memory_free_bytes/windows_os_visible_memory_bytes) by (region,datacenter)
+      expr09: &id009 avg(node_memory_Active_bytes/node_memory_MemTotal_bytes) by (region, datacenter,superfarm)
+      expr10: &id010 avg(windows_os_physical_memory_free_bytes/windows_os_visible_memory_bytes) by (region,datacenter,superfarm)
+  - name: rules-dc2
+    concurrency: *default-concurrency
+    interval: 5m
+    params:
+      extra_filters:
+        - '{datacenter=~"dc2.*"}'
+    rules:
+      expr01: *id001
+      expr02: *id002
+      expr03: *id003
+      expr04: *id004
+      expr05: *id005
+      expr06: *id006
+      expr07: *id007
+      expr08: *id008
+      expr09: *id009
+      expr10: *id010
+  - name: rules-other
+    concurrency: *default-concurrency
+    interval: 5m
+    params:
+      extra_filters:
+        - '{datacenter!~"dc1.*|dc2.*"}'
+    rules:
+      expr01: *id001
+      expr02: *id002
+      expr03: *id003
+      expr04: *id004
+      expr05: *id005
+      expr06: *id006
+      expr07: *id007
+      expr08: *id008
+      expr09: *id009
+      expr10: *id010

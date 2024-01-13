@@ -32,7 +32,7 @@ var (
 
 // InitConfig creates a new Config with the default values.
 // SnakeCharmer will override the values with params
-// from the config file, ENV vars, or flags
+// from the config file, ENV vars, or flags.
 func InitConfig() {
 	splitPointPath := "*"
 	srcFilePath := "./**/*.{yml,yaml}"
@@ -52,7 +52,7 @@ func InitConfig() {
 	}
 }
 
-// Config represents the *yp* configuration
+// Config represents the *yp* configuration.
 type Config struct {
 	// Split point path in YAML, e.g. 'groups.*.rules'. This must be a SequenceNode or MappingNode."
 	SplitPointPath *string `mapstructure:"split-at,omitempty" usage:"REQUIRED. Split point path in YAML, e.g. 'groups.*.rules'. This must be a YAML SequenceNode or MappingNode." env:"YP_SPLIT_POINT"`
