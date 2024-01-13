@@ -175,11 +175,11 @@ release-goos-goarch: \
 	build-$(GOOS)-$(GOARCH)-docker
 	cd $(ROOT)/build && \
 		$(TAR) --transform="flags=r;s|-$(GOOS)-$(GOARCH)-prod||" \
-			-czf $(ROOT)/release/$(APP_NAME)-$(GOOS)-$(GOARCH)-$(PKG_TAG).tar.gz \
+			-czf $(APP_NAME)-$(GOOS)-$(GOARCH)-$(PKG_TAG).tar.gz \
 			$(APP_NAME)-$(GOOS)-$(GOARCH)-prod && \
-		$(SHA256SUM) $(ROOT)/release/$(APP_NAME)-$(GOOS)-$(GOARCH)-$(PKG_TAG).tar.gz \
-			$(ROOT)/release/$(APP_NAME)-$(GOOS)-$(GOARCH)-prod | \
-			sed s/-$(GOOS)-$(GOARCH)-prod// > $(ROOT)/release/$(APP_NAME)-$(GOOS)-$(GOARCH)-$(PKG_TAG)_checksums.txt
+		$(SHA256SUM) $(APP_NAME)-$(GOOS)-$(GOARCH)-$(PKG_TAG).tar.gz \
+			$(APP_NAME)-$(GOOS)-$(GOARCH)-prod | \
+			sed s/-$(GOOS)-$(GOARCH)-prod// > $(APP_NAME)-$(GOOS)-$(GOARCH)-$(PKG_TAG)_checksums.txt
 	cd $(ROOT)/build && \
 		rm -f $(APP_NAME)-$(GOOS)-$(GOARCH)-prod
 
