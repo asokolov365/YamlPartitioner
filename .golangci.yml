@@ -142,3 +142,4 @@ run:
   skip-dirs:
     - /usr/local/go/src
     - /go/src
+    - /go/*/x64/src
