@@ -93,8 +93,8 @@ build-openbsd-amd64-local:
 build-goos-goarch-local:
 	mkdir -p $(ROOT)/build
 	# rm needed due to signature caching (https://apple.stackexchange.com/a/428388)
-	rm -f "$(ROOT)/build/$(APP_NAME)-$(GOOS)-$(GOARCH)"
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(GO_BUILDINFO)" -tags "osusergo" -o "$(ROOT)/build/$(APP_NAME)-$(GOOS)-$(GOARCH)" .
+	rm -f "$(ROOT)/build/$(APP_NAME)-$(GOOS)-$(GOARCH)-dev"
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(GO_BUILDINFO)" -tags "osusergo" -o "$(ROOT)/build/$(APP_NAME)-$(GOOS)-$(GOARCH)-dev" .
 
 build-linux-amd64-docker:
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 $(MAKE) build-goos-goarch-docker
@@ -187,7 +187,7 @@ release-goos-goarch: \
 ##@ Clean
 
 clean: ## Remove produced binaries, libraries, and temp files
-	@rm -rf $(ROOT)/build/* $(ROOT)/docker-gocache $(ROOT)/tmp
+	@rm -rf $(ROOT)/build/* $(ROOT)/release/* $(ROOT)/docker-gocache $(ROOT)/tmp
 	@rm -f coverage.txt
 
 ##@ Checks
@@ -379,11 +379,7 @@ github-delete-release: github-token-check ## Delete release
 # http://linuxcommand.org/lc3_adv_awk.php
 help: ## Display this help.
 	@echo -e "\033[32m"
-	@echo "Targets in this Makefile build and test YamlPartitioner in a build container in"
-	@echo "Docker. For testing (only), use the 'local' prefix target to run targets directly"
-	@echo "on your workstation (ex. 'make local test'). You will need to have its GOPATH set"
-	@echo "and have already run 'make tools'. Set GOOS=linux to build binaries for Docker."
-	@echo "Do not use 'make local' for building binaries for public release!"
-	@echo "Before packaging always run 'make clean build test integration'!"
+	@echo "Do not use 'make crossbuild' for building binaries for public release!"
+	@echo "Before packaging always run 'make clean release'!"
 	@echo
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
