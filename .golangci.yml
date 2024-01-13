@@ -138,7 +138,7 @@ linters-settings:
 run:
   timeout: 5m
   concurrency: 4
-  skip-dirs-use-default: false
+  skip-dirs-use-default: true
   skip-dirs:
     - /usr/local/go/src
     - /go/src
